@@ -585,7 +585,7 @@ private fun ExamQuestionMapDialog(
                             modifier = Modifier.aspectRatio(1f)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text("\${index + 1}", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text("${index + 1}", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     (if (q.flagged) "⚑" else "") + (if (q.questionId in bookmarkedIds) "★" else ""),
                                     fontSize = 9.sp,
@@ -653,8 +653,8 @@ private fun ResultScreen(repository: ExamRepository, nav: androidx.navigation.Na
             Card(colors = CardDefaults.cardColors(containerColor = Navy)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp)) {
                     Text("TOTAL SCORE", color = Color(0xFFC7D5E4), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text("\${fmt(a.totalScore)} / \${fmt(a.maxPossibleMarks)}", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                    Text("\${fmt(a.accuracyPercent)}% accuracy · \${formatDuration(a.elapsedSeconds)}", color = Color(0xFFD8E4EF), modifier = Modifier.padding(top = 5.dp))
+                    Text("${fmt(a.totalScore)} / ${fmt(a.maxPossibleMarks)}", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text("${fmt(a.accuracyPercent)}% accuracy · ${formatDuration(a.elapsedSeconds)}", color = Color(0xFFD8E4EF), modifier = Modifier.padding(top = 5.dp))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -666,7 +666,7 @@ private fun ResultScreen(repository: ExamRepository, nav: androidx.navigation.Na
                 ScoreLine("Correct-answer marks", fmt(a.correctCount * a.positiveMarks), Green)
                 ScoreLine("Skipped-question marks", fmt(a.skippedCount * a.skippedMarks), Green)
                 ScoreLine("Total marks awarded", fmt(a.marksAwarded), Green)
-                ScoreLine("Marks deducted", "−\${fmt(a.marksDeducted)}", Red)
+                ScoreLine("Marks deducted", "−${fmt(a.marksDeducted)}", Red)
                 ScoreLine("Net score", fmt(a.totalScore), Navy)
                 ScoreLine("Time taken", formatDuration(a.elapsedSeconds), Navy)
                 ScoreLine("Questions", a.questionCount.toString(), Navy)
@@ -703,12 +703,12 @@ private fun ResultQuestionCard(number: Int, q: AttemptQuestionEntity, onClick: (
     Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Q$number · \${q.questionId}", color = Navy, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("Q$number · ${q.questionId}", color = Navy, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 Text(status.uppercase(), color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
             Text(q.question, color = Navy, fontSize = 14.sp, maxLines = 2)
-            Text("Your answer: \${q.selectedAnswer ?: "Not answered"}", color = color, fontSize = 12.sp)
-            Text("Correct answer: \${q.correctAnswer}", color = Green, fontSize = 12.sp)
+            Text("Your answer: ${q.selectedAnswer ?: "Not answered"}", color = color, fontSize = 12.sp)
+            Text("Correct answer: ${q.correctAnswer}", color = Green, fontSize = 12.sp)
             Text("Open full review →", color = Teal, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
