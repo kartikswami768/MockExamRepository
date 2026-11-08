@@ -743,6 +743,7 @@ private fun HistoryScreen(repository: ExamRepository, nav: androidx.navigation.N
 
 @Composable
 private fun ReviewScreen(repository: ExamRepository, nav: androidx.navigation.NavHostController) {
+    val scope = rememberCoroutineScope()
     var type by remember { mutableStateOf("BOOKMARKED") }
     var sets by remember { mutableStateOf<List<QuestionSetEntity>>(emptyList()) }
     var selectedSet by remember { mutableStateOf<String?>(null) }
@@ -759,7 +760,12 @@ private fun ReviewScreen(repository: ExamRepository, nav: androidx.navigation.Na
             items = questions.map { it.toReviewQuestionItem() },
             initialIndex = selectedQuestionIndex,
             repository = repository,
-            onClose = { selectedQuestionIndex = -1 }
+            onClose = {
+                selectedQuestionIndex = -1
+                scope.launch {
+                    questions = withContext(Dispatchers.IO) { repository.getReviewQuestions(type, selectedSet) }
+                }
+            }
         )
         return
     }
@@ -819,6 +825,8 @@ private fun ReviewQuestionPlayer(
     val item = items[index]
 
     LaunchedEffect(item.setId, item.questionId, item.hasAttemptContext) {
+        latestResponse = null
+        bookmarked = false
         latestResponse = if (item.hasAttemptContext) null else {
             withContext(Dispatchers.IO) { repository.getLatestResponse(item.setId, item.questionId) }
         }
