@@ -1139,7 +1139,7 @@ private fun formatCountdown(seconds: Long): String = String.format(Locale.getDef
 private fun formatDuration(seconds: Long): String = if (seconds >= 3600) String.format(Locale.getDefault(), "%d h %02d min", seconds / 3600, (seconds % 3600) / 60) else String.format(Locale.getDefault(), "%d min %02d sec", seconds / 60, seconds % 60)
 private fun formatDate(time: Long): String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
 private fun configSummary(a: TestAttemptEntity): String = buildString {
-    append(if (a.secondsPerQuestion > 0) "${a.secondsPerQuestion} sec/question · total ${formatDuration(a.timeLimitSeconds.toLong())}" else if (a.timingMode == "OVERALL") "Whole test: ${formatDuration(a.timeLimitSeconds.toLong())}" else "Previous per-question timer: ${a.timeLimitSeconds} sec")
+    append(if (a.timingMode == "PER_QUESTION") "Previous per-question timer: ${a.timeLimitSeconds} sec" else if (a.secondsPerQuestion > 0) "${a.secondsPerQuestion} sec/question · total ${formatDuration(a.timeLimitSeconds.toLong())}" else "Whole test: ${formatDuration(a.timeLimitSeconds.toLong())}")
     append(" · +${fmt(a.positiveMarks)}")
     append(" · ")
     append(if (a.negativeMarkingEnabled) "−${fmt(a.negativeMarks)}" else "negative marking off")
