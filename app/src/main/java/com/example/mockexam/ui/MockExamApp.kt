@@ -397,7 +397,7 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
         topBar = {
             TopAppBarSimple(
                 a.testName,
-                if (a.timingMode == "OVERALL") "Whole-test timer" else "Per-question timer"
+                if (a.secondsPerQuestion > 0 && a.timingMode == "OVERALL") "${a.questionCount} × ${a.secondsPerQuestion}s · Total ${formatDuration(a.timeLimitSeconds.toLong())}" else if (a.timingMode == "OVERALL") "Whole-test timer" else "Previous per-question timer"
             )
         },
         bottomBar = {
@@ -417,7 +417,7 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Question $questionNumber of ${a.questionCount}", fontWeight = FontWeight.SemiBold, color = Navy)
-                    Text("$answered answered · ${a.questionCount - answered} unanswered", color = Muted, fontSize = 12.sp)
+                    Text("$answered answered · ${currentBundle.questions.count { it.visited }} visited · ${currentBundle.questions.count { it.flagged }} for review", color = Muted, fontSize = 12.sp)
                 }
                 Card(colors = CardDefaults.cardColors(containerColor = if (remainingSeconds <= 10) Color(0xFFFFE8E6) else Color.White)) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -435,7 +435,7 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { showMap = true }, modifier = Modifier.weight(1f)) { Text("Question map") }
                 OutlinedButton(onClick = { scope.launch { isBookmarked = withContext(Dispatchers.IO) { repository.toggleBookmark(current.setId, current.questionId) } } }, modifier = Modifier.weight(1f)) { Text(if (isBookmarked) "★ Bookmarked" else "☆ Bookmark") }
-                OutlinedButton(onClick = { scope.launch { withContext(Dispatchers.IO) { repository.toggleFlag(attemptId, a.currentPosition) }; reload() } }, modifier = Modifier.weight(1f)) { Text(if (current.flagged) "Flagged" else "Flag") }
+                OutlinedButton(onClick = { scope.launch { withContext(Dispatchers.IO) { repository.toggleFlag(attemptId, a.currentPosition) }; reload() } }, modifier = Modifier.weight(1f)) { Text(if (current.flagged) "Marked" else "Mark for review") }
             }
             Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -468,6 +468,23 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
                     if (current.timeExpired) Text("Time expired for this question. It can no longer be answered.", color = Red, fontSize = 12.sp)
                 }
             }
+            if (current.selectedAnswer == null && !current.timeExpired) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { repository.skipQuestion(attemptId, a.currentPosition) }
+                            if (a.currentPosition < a.questionCount - 1) {
+                                withContext(Dispatchers.IO) { repository.moveTo(attemptId, a.currentPosition + 1) }
+                                reload()
+                            } else {
+                                reload()
+                                showSubmitConfirm = true
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Skip question") }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Flagged questions are reminders; bookmarks are saved to the separate review section.", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 TextButton(onClick = { showSubmitConfirm = true }) { Text("Submit test") }
@@ -476,35 +493,18 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
     }
 
     if (showMap) {
-        AlertDialog(
-            onDismissRequest = { showMap = false },
-            title = { Text("Question overview") },
-            text = {
-                Column {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                        LegendDot(Green, "Answered")
-                        LegendDot(Muted, "Unanswered")
-                        LegendDot(Amber, "Flagged")
-                        LegendDot(Teal, "★ Saved")
-                    }
-                    LazyVerticalGrid(columns = GridCells.Fixed(5), modifier = Modifier.heightIn(max = 320.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        itemsIndexed(currentBundle.questions) { index, q ->
-                            val bg = when {
-                                q.flagged -> Amber
-                                q.selectedAnswer != null -> Green
-                                else -> Color(0xFFE2E8F0)
-                            }
-                            Button(
-                                onClick = { showMap = false; scope.launch { withContext(Dispatchers.IO) { repository.moveTo(attemptId, index) }; reload() } },
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = bg, contentColor = if (bg == Color(0xFFE2E8F0)) Navy else Color.White),
-                                modifier = Modifier.aspectRatio(1f)
-                            ) { Text("${index + 1}${if (q.questionId in bookmarkedIds) "★" else ""}", fontSize = 12.sp) }
-                        }
-                    }
+        ExamQuestionMapDialog(
+            questions = currentBundle.questions,
+            currentPosition = a.currentPosition,
+            bookmarkedIds = bookmarkedIds,
+            onSelect = { index ->
+                showMap = false
+                scope.launch {
+                    withContext(Dispatchers.IO) { repository.moveTo(attemptId, index) }
+                    reload()
                 }
             },
-            confirmButton = { TextButton(onClick = { showMap = false }) { Text("Close") } }
+            onDismiss = { showMap = false }
         )
     }
     if (showSubmitConfirm) {
