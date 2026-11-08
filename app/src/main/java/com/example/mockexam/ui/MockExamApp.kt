@@ -526,20 +526,60 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
     }
 }
 
+private data class ReviewQuestionItem(
+    val setId: String,
+    val questionId: String,
+    val question: String,
+    val imagePath: String?,
+    val optionA: String,
+    val optionB: String,
+    val optionC: String,
+    val optionD: String,
+    val correctAnswer: String,
+    val explanation: String,
+    val selectedAnswer: String?,
+    val hasAttemptContext: Boolean,
+    val flagged: Boolean
+)
+
+private fun AttemptQuestionEntity.toReviewQuestionItem() = ReviewQuestionItem(
+    setId, questionId, question, imagePath, optionA, optionB, optionC, optionD,
+    correctAnswer, explanation, selectedAnswer, true, flagged
+)
+
+private fun QuestionEntity.toReviewQuestionItem() = ReviewQuestionItem(
+    setId, questionId, question, imagePath, optionA, optionB, optionC, optionD,
+    correctAnswer, explanation, null, false, false
+)
+
 @Composable
 private fun ResultScreen(repository: ExamRepository, nav: androidx.navigation.NavHostController, attemptId: String) {
     var bundle by remember { mutableStateOf<AttemptBundle?>(null) }
+    var reviewIndex by remember { mutableIntStateOf(-1) }
+    var showQuestionMap by remember { mutableStateOf(false) }
     LaunchedEffect(attemptId) { bundle = withContext(Dispatchers.IO) { repository.getAttemptBundle(attemptId) } }
     val value = bundle
     if (value == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return }
     val a = value.attempt
+    val reviewItems = value.questions.map { it.toReviewQuestionItem() }
+
+    if (reviewIndex >= 0) {
+        ReviewQuestionPlayer(
+            items = reviewItems,
+            initialIndex = reviewIndex,
+            repository = repository,
+            onClose = { reviewIndex = -1 }
+        )
+        return
+    }
+
     Scaffold(containerColor = Page, topBar = { TopAppBarSimple("Test results", a.testName) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Card(colors = CardDefaults.cardColors(containerColor = Navy)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp)) {
                     Text("TOTAL SCORE", color = Color(0xFFC7D5E4), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text("${fmt(a.totalScore)} / ${fmt(a.maxPossibleMarks)}", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                    Text("${fmt(a.accuracyPercent)}% accuracy · ${formatDuration(a.elapsedSeconds)}", color = Color(0xFFD8E4EF), modifier = Modifier.padding(top = 5.dp))
+                    Text("\${fmt(a.totalScore)} / \${fmt(a.maxPossibleMarks)}", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text("\${fmt(a.accuracyPercent)}% accuracy · \${formatDuration(a.elapsedSeconds)}", color = Color(0xFFD8E4EF), modifier = Modifier.padding(top = 5.dp))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -551,45 +591,50 @@ private fun ResultScreen(repository: ExamRepository, nav: androidx.navigation.Na
                 ScoreLine("Correct-answer marks", fmt(a.correctCount * a.positiveMarks), Green)
                 ScoreLine("Skipped-question marks", fmt(a.skippedCount * a.skippedMarks), Green)
                 ScoreLine("Total marks awarded", fmt(a.marksAwarded), Green)
-                ScoreLine("Marks deducted", "−${fmt(a.marksDeducted)}", Red)
+                ScoreLine("Marks deducted", "−\${fmt(a.marksDeducted)}", Red)
                 ScoreLine("Net score", fmt(a.totalScore), Navy)
                 ScoreLine("Time taken", formatDuration(a.elapsedSeconds), Navy)
                 ScoreLine("Questions", a.questionCount.toString(), Navy)
                 ScoreLine("Configuration", configSummary(a), Muted)
             }
-            Text("Question-by-question review", color = Navy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Question-by-question review", color = Navy, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = { showQuestionMap = true }) { Text("Question map") }
+            }
             value.questions.forEachIndexed { index, q ->
-                ResultQuestionCard(index + 1, q, repository)
+                ResultQuestionCard(index + 1, q) { reviewIndex = index }
             }
             Button(onClick = { nav.navigate("library") { popUpTo("library") { inclusive = true } } }, modifier = Modifier.fillMaxWidth()) { Text("Back to question banks") }
         }
     }
+    if (showQuestionMap) {
+        ReviewQuestionMapDialog(
+            items = reviewItems,
+            currentIndex = 0,
+            onSelect = { index -> showQuestionMap = false; reviewIndex = index },
+            onDismiss = { showQuestionMap = false }
+        )
+    }
 }
 
 @Composable
-private fun ResultQuestionCard(number: Int, q: AttemptQuestionEntity, repository: ExamRepository) {
-    val scope = rememberCoroutineScope()
-    var bookmarked by remember { mutableStateOf(false) }
-    LaunchedEffect(q.setId, q.questionId) { bookmarked = withContext(Dispatchers.IO) { repository.isBookmarked(q.setId, q.questionId) } }
+private fun ResultQuestionCard(number: Int, q: AttemptQuestionEntity, onClick: () -> Unit) {
     val status = when {
         q.selectedAnswer == null -> "Skipped"
         q.selectedAnswer == q.correctAnswer -> "Correct"
         else -> "Incorrect"
     }
     val color = when (status) { "Correct" -> Green; "Incorrect" -> Red; else -> Muted }
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Q$number · ${q.questionId}", color = Navy, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("Q$number · \${q.questionId}", color = Navy, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 Text(status.uppercase(), color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
-            Text(q.question, color = Navy, fontSize = 15.sp)
-            LocalQuestionImage(q.imagePath)
-            Text("Your answer: ${q.selectedAnswer ?: "Not answered"}${if (q.selectedAnswer == null) "" else " — ${optionText(q, q.selectedAnswer)}"}", color = color, fontSize = 13.sp)
-            Text("Correct answer: ${q.correctAnswer} — ${optionText(q, q.correctAnswer)}", color = Green, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            Text("Explanation", color = Navy, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-            Text(q.explanation, color = Color(0xFF334155), fontSize = 13.sp, lineHeight = 19.sp)
-            TextButton(onClick = { scope.launch { bookmarked = withContext(Dispatchers.IO) { repository.toggleBookmark(q.setId, q.questionId) } } }) { Text(if (bookmarked) "Remove bookmark" else "Bookmark question") }
+            Text(q.question, color = Navy, fontSize = 14.sp, maxLines = 2)
+            Text("Your answer: \${q.selectedAnswer ?: "Not answered"}", color = color, fontSize = 12.sp)
+            Text("Correct answer: \${q.correctAnswer}", color = Green, fontSize = 12.sp)
+            Text("Open full review →", color = Teal, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
