@@ -6,6 +6,7 @@ import androidx.room.withTransaction
 import com.example.mockexam.domain.ScoreSummary
 import com.example.mockexam.domain.Scoring
 import com.example.mockexam.domain.ScoringAnswer
+import com.example.mockexam.domain.ExamTiming
 import com.example.mockexam.importer.ParsedQuestionBank
 import com.example.mockexam.importer.XlsxQuestionImporter
 import java.util.UUID
@@ -62,13 +63,15 @@ class ExamRepository(
         require(selectedQuestionIds.isNotEmpty()) { "Select at least one question." }
         require(timeLimitSeconds > 0) { "Total test time must be greater than zero." }
         require(secondsPerQuestion > 0) { "Time per question must be greater than zero." }
-        require(timeLimitSeconds <= 86_400) { "Total test time cannot exceed 24 hours." }
         require(positiveMarks > 0.0) { "Positive marks must be greater than zero." }
         require(negativeMarks >= 0.0 && skippedMarks >= 0.0) { "Negative and skipped marks cannot be negative." }
         val set = sets.getById(setId) ?: error("Question bank no longer exists.")
         val all = questions.getForSet(setId).associateBy { it.questionId }
         val selected = selectedQuestionIds.distinct().mapNotNull { all[it] }
         require(selected.isNotEmpty()) { "No selected questions were found." }
+        require(timeLimitSeconds == ExamTiming.totalDurationSeconds(selected.size, secondsPerQuestion)) {
+            "Total test time must equal the selected question count multiplied by time per question."
+        }
         val now = System.currentTimeMillis()
         val attemptId = UUID.randomUUID().toString()
         val attempt = TestAttemptEntity(
