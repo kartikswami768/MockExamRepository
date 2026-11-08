@@ -1,5 +1,6 @@
 package com.example.mockexam.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -85,7 +86,8 @@ data class TestAttemptEntity(
     val skippedCount: Int,
     val marksAwarded: Double,
     val marksDeducted: Double,
-    val accuracyPercent: Double
+    val accuracyPercent: Double,
+    @ColumnInfo(defaultValue = "0") val secondsPerQuestion: Int = 0
 )
 
 @Entity(
@@ -117,7 +119,9 @@ data class AttemptQuestionEntity(
     val selectedAnswer: String?,
     val flagged: Boolean,
     val questionDeadlineAtMillis: Long?,
-    val timeExpired: Boolean
+    val timeExpired: Boolean,
+    @ColumnInfo(defaultValue = "0") val visited: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val skipped: Boolean = false
 )
 
 fun QuestionEntity.asAttemptQuestion(attemptId: String, position: Int, deadlineAtMillis: Long?): AttemptQuestionEntity =
@@ -137,5 +141,7 @@ fun QuestionEntity.asAttemptQuestion(attemptId: String, position: Int, deadlineA
         selectedAnswer = null,
         flagged = false,
         questionDeadlineAtMillis = deadlineAtMillis,
-        timeExpired = false
+        timeExpired = false,
+        visited = position == 0,
+        skipped = false
     )
