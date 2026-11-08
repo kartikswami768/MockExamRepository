@@ -8,9 +8,11 @@ An offline-first Android MCQ mock-test app. Question banks are imported from `.x
 - Support standard OOXML shared strings / inline strings and embedded PNG, JPG/JPEG, GIF, or WebP images anchored to the corresponding row in the `Image` column.
 - Provide in-app export of the blank template and sample question workbook.
 - Configure all questions or explicitly select individual questions.
-- Configure an overall timer or an individual timer per question.
+- Configure one continuous exam timer from a seconds-per-question pacing allowance multiplied by the actual selected question count; the absolute deadline survives app closure and resume. Existing in-progress attempts created with the earlier per-question timer retain their original behaviour.
 - Configure positive, negative, and skipped-question marks, including a negative-marking toggle.
-- One-question-at-a-time exam UI, navigation, question map, bookmark and flag controls, countdowns, manual submit confirmation, and automatic submission on timeout.
+- One-question-at-a-time exam UI with Previous/Next, explicit Skip, Bookmark, Mark for review, an exam-state question map (answered, skipped, visited-unanswered, not visited), countdown, manual submit confirmation, and automatic submission on timeout.
+- Full-screen review player shared by completed-test results and the Saved/Incorrect/Skipped library, with correct-answer highlighting, the most recent recorded response where available, explanations, bookmarking, Previous/Next, swipe navigation, and a correctness-based question map.
+- Room migration from database version 1 to 2 adds pacing metadata and independent visited/skipped question state without destructive database recreation.
 - Persist results and test settings; reopen completed attempts from history.
 - Review correct answers and original explanations; browse bookmarked, incorrect, and skipped questions across submitted attempts.
 - Filter the review list by source question bank.
@@ -62,8 +64,8 @@ For each question:
 | `question_sets` | Source workbook metadata and import date |
 | `questions` | Canonical imported questions, keyed by question-set ID + question ID |
 | `question_bookmarks` | Durable bookmarks independent of individual test attempts |
-| `test_attempts` | Test configuration, deadline, submission state, score and summary metrics |
-| `attempt_questions` | Immutable question snapshots plus selected answer, flag, expiry and per-question deadline |
+| `test_attempts` | Test configuration, total deadline, seconds-per-question pacing allowance, submission state, score and summary metrics |
+| `attempt_questions` | Immutable question snapshots plus selected answer, visited/skipped/flagged state, expiry and legacy per-question deadline |
 
 ## Build and install
 
