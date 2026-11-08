@@ -96,10 +96,15 @@ interface ReviewDao {
         WHERE t.status = 'SUBMITTED'
           AND aq.setId = :setId
           AND aq.questionId = :questionId
+          AND (
+              :responseFilter = 'ANY'
+              OR (:responseFilter = 'INCORRECT' AND aq.selectedAnswer IS NOT NULL AND aq.selectedAnswer != aq.correctAnswer)
+              OR (:responseFilter = 'SKIPPED' AND aq.selectedAnswer IS NULL)
+          )
         ORDER BY t.startedAtMillis DESC
         LIMIT 1
     """)
-    suspend fun getLatestResponse(setId: String, questionId: String): LatestQuestionResponse?
+    suspend fun getLatestResponse(setId: String, questionId: String, responseFilter: String): LatestQuestionResponse?
 
     @Query("""
         SELECT DISTINCT q.* FROM questions q
