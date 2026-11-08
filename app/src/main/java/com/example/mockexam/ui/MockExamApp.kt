@@ -37,6 +37,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.mockexam.data.*
 import com.example.mockexam.importer.ImportValidationException
+import com.example.mockexam.domain.ExamTiming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -251,7 +252,9 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
             SectionCard("Exam timing") {
                 NumberField("Time per question (seconds)", perQuestionSeconds, { perQuestionSeconds = it })
                 val configuredSeconds = perQuestionSeconds.toLongOrNull()
-                val calculatedTotal = configuredSeconds?.times(count.toLong())
+                val calculatedTotal = configuredSeconds?.takeIf { it in 1L..Int.MAX_VALUE.toLong() }?.let { seconds ->
+                    runCatching { ExamTiming.totalDurationSeconds(count, seconds.toInt()).toLong() }.getOrNull()
+                }
                 Text(
                     if (count > 0 && configuredSeconds != null && configuredSeconds > 0 && calculatedTotal != null) {
                         "$count questions × $configuredSeconds seconds = ${formatDuration(calculatedTotal)} total"
@@ -282,8 +285,7 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
                     val n = negative.toDoubleOrNull()
                     val s = skipped.toDoubleOrNull()
                     val perQuestion = perQuestionSeconds.toIntOrNull()
-                    val totalTime = if (perQuestion != null && count > 0) perQuestion.toLong() * count else 0L
-                    val time = totalTime.takeIf { it in 1L..86_400L }?.toInt()
+                    val time = perQuestion?.let { runCatching { ExamTiming.totalDurationSeconds(count, it) }.getOrNull() }
                     val problem = when {
                         count <= 0 -> "Select at least one question."
                         p == null || p <= 0.0 -> "Positive marks must be greater than zero."
