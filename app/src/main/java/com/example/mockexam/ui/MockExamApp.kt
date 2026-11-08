@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed as lazyItemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -792,7 +793,7 @@ private fun ReviewScreen(repository: ExamRepository, nav: androidx.navigation.Na
                 )
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 10.dp)) {
-                    itemsIndexed(questions, key = { _, q -> q.setId + ":" + q.questionId }) { index, q ->
+                    lazyItemsIndexed(questions, key = { _, q -> q.setId + ":" + q.questionId }) { index, q ->
                         Card(onClick = { selectedQuestionIndex = index }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                                 Text(q.questionId + " · " + (sets.firstOrNull { it.id == q.setId }?.name ?: "Question bank"), color = Teal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
