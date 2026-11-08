@@ -614,17 +614,18 @@ private data class ReviewQuestionItem(
     val explanation: String,
     val selectedAnswer: String?,
     val hasAttemptContext: Boolean,
-    val flagged: Boolean
+    val flagged: Boolean,
+    val responseFilter: String
 )
 
 private fun AttemptQuestionEntity.toReviewQuestionItem() = ReviewQuestionItem(
     setId, questionId, question, imagePath, optionA, optionB, optionC, optionD,
-    correctAnswer, explanation, selectedAnswer, true, flagged
+    correctAnswer, explanation, selectedAnswer, true, flagged, "ANY"
 )
 
-private fun QuestionEntity.toReviewQuestionItem() = ReviewQuestionItem(
+private fun QuestionEntity.toReviewQuestionItem(responseFilter: String = "ANY") = ReviewQuestionItem(
     setId, questionId, question, imagePath, optionA, optionB, optionC, optionD,
-    correctAnswer, explanation, null, false, false
+    correctAnswer, explanation, null, false, false, responseFilter
 )
 
 @Composable
@@ -757,7 +758,7 @@ private fun ReviewScreen(repository: ExamRepository, nav: androidx.navigation.Na
 
     if (selectedQuestionIndex >= 0 && questions.isNotEmpty()) {
         ReviewQuestionPlayer(
-            items = questions.map { it.toReviewQuestionItem() },
+            items = questions.map { it.toReviewQuestionItem(type) },
             initialIndex = selectedQuestionIndex,
             repository = repository,
             onClose = {
@@ -824,11 +825,11 @@ private fun ReviewQuestionPlayer(
     var showMap by remember { mutableStateOf(false) }
     val item = items[index]
 
-    LaunchedEffect(item.setId, item.questionId, item.hasAttemptContext) {
+    LaunchedEffect(item.setId, item.questionId, item.hasAttemptContext, item.responseFilter) {
         latestResponse = null
         bookmarked = false
         latestResponse = if (item.hasAttemptContext) null else {
-            withContext(Dispatchers.IO) { repository.getLatestResponse(item.setId, item.questionId) }
+            withContext(Dispatchers.IO) { repository.getLatestResponse(item.setId, item.questionId, item.responseFilter) }
         }
         bookmarked = withContext(Dispatchers.IO) { repository.isBookmarked(item.setId, item.questionId) }
     }
