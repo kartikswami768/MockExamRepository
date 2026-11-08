@@ -75,7 +75,7 @@ This source project targets Android API 35, minimum API 26, JDK 17, Kotlin 2.0.2
 4. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 5. To install from a terminal once the Android SDK / platform tools are installed: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 
-The repository does not include generated Gradle wrapper binaries. Configure Gradle 8.9 in Android Studio, or install Gradle 8.9 locally and run `gradle :app:assembleDebug` from the project root.
+The repository includes the Gradle Wrapper pinned to Gradle 8.9, with distribution checksum verification and retry support. On macOS/Linux, build from the project root with `./gradlew :app:assembleDebug`; on Windows, use `gradlew.bat :app:assembleDebug`. GitHub Actions also builds and tests the app on pushes to `main` and on manual dispatch. After a successful run, download the `mockexam-debug-apk` artifact from the workflow run page.
 
 ## Verification performed in the authoring environment
 

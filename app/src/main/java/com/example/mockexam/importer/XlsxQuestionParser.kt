@@ -289,8 +289,8 @@ object XlsxQuestionParser {
             setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
             setFeature("http://xml.org/sax/features/external-general-entities", false)
             setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            try { setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "") } catch (_: Exception) { }
-            try { setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "") } catch (_: Exception) { }
+            try { setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "") } catch (_: Exception) { }
+            try { setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "") } catch (_: Exception) { }
         }
         return java.io.ByteArrayInputStream(xmlBytes).use { factory.newDocumentBuilder().parse(it) }
     }

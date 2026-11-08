@@ -8,54 +8,59 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Test and build debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify preinstalled Gradle
-        run: gradle --version
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
 
-      - name: Configure preinstalled Android SDK
-        shell: bash
+      - name: Install required Android SDK packages
         run: |
-          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          if [ ! -d "$SDK_ROOT/cmdline-tools" ]; then
-            echo "Android command-line tools not found under $SDK_ROOT"
-            exit 1
-          fi
-          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager executable was not found under $SDK_ROOT/cmdline-tools"
-            exit 1
-          fi
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
-          # Feed licence confirmations from a regular file to avoid SIGPIPE.
-          for i in {1..100}; do printf 'y\n'; done > "$RUNNER_TEMP/android-sdk-licenses.txt"
-          "$SDKMANAGER" --licenses < "$RUNNER_TEMP/android-sdk-licenses.txt"
-          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Run unit tests
-        run: gradle testDebugUnitTest
+      - name: Set up Gradle and dependency cache
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
-      - name: Build debug APK
-        run: gradle assembleDebug
+      - name: Verify Gradle wrapper
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --version
 
-      - name: Upload APK
+      - name: Run tests and build APK
+        run: |
+          ./gradlew --no-daemon \
+            :app:testDebugUnitTest \
+            :app:assembleDebug
+
+      - name: Verify APK output
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          ls -lh "$APK"
+
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: mockexam-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
