@@ -220,6 +220,7 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
         selectedIds.addAll(questions.map { it.questionId })
         testName = set?.name.orEmpty()
     }
+    val count = if (pickSpecific) selectedIds.size else questions.size
 
     Scaffold(containerColor = Page, topBar = { TopAppBarSimple("Configure test", set?.name ?: "Loading question bank") }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -277,7 +278,6 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
             Button(
                 enabled = !creating && questions.isNotEmpty(),
                 onClick = {
-                    val count = if (pickSpecific) selectedIds.size else questions.size
                     val p = positive.toDoubleOrNull()
                     val n = negative.toDoubleOrNull()
                     val s = skipped.toDoubleOrNull()
