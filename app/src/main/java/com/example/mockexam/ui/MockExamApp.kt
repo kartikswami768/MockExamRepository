@@ -419,7 +419,7 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Question $questionNumber of ${a.questionCount}", fontWeight = FontWeight.SemiBold, color = Navy)
-                    Text("$answered answered · ${currentBundle.questions.count { it.visited }} visited · ${currentBundle.questions.count { it.flagged }} for review", color = Muted, fontSize = 12.sp)
+                    Text("$answered answered · ${currentBundle.questions.count { it.skipped }} skipped · ${currentBundle.questions.count { it.flagged }} for review", color = Muted, fontSize = 12.sp)
                 }
                 Card(colors = CardDefaults.cardColors(containerColor = if (remainingSeconds <= 10) Color(0xFFFFE8E6) else Color.White)) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -488,7 +488,7 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
                 ) { Text("Skip question") }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Flagged questions are reminders; bookmarks are saved to the separate review section.", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text("Mark for review to return to a question later. Bookmarks are saved to your review library.", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 TextButton(onClick = { showSubmitConfirm = true }) { Text("Submit test") }
             }
         }
@@ -1131,7 +1131,7 @@ private fun formatCountdown(seconds: Long): String = String.format(Locale.getDef
 private fun formatDuration(seconds: Long): String = if (seconds >= 3600) String.format(Locale.getDefault(), "%d h %02d min", seconds / 3600, (seconds % 3600) / 60) else String.format(Locale.getDefault(), "%d min %02d sec", seconds / 60, seconds % 60)
 private fun formatDate(time: Long): String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
 private fun configSummary(a: TestAttemptEntity): String = buildString {
-    append(if (a.timingMode == "OVERALL") "Whole test: ${a.timeLimitSeconds / 60} min" else "Per question: ${a.timeLimitSeconds} sec")
+    append(if (a.secondsPerQuestion > 0) "${a.secondsPerQuestion} sec/question · total ${formatDuration(a.timeLimitSeconds.toLong())}" else if (a.timingMode == "OVERALL") "Whole test: ${formatDuration(a.timeLimitSeconds.toLong())}" else "Previous per-question timer: ${a.timeLimitSeconds} sec")
     append(" · +${fmt(a.positiveMarks)}")
     append(" · ")
     append(if (a.negativeMarkingEnabled) "−${fmt(a.negativeMarks)}" else "negative marking off")
