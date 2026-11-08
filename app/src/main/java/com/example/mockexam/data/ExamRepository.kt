@@ -208,7 +208,14 @@ class ExamRepository(
                 val nextPosition = attempt.currentPosition + 1
                 val next = attemptQuestions.getOne(attemptId, nextPosition)
                 if (next != null && next.questionDeadlineAtMillis == null) {
-                    attemptQuestions.update(next.copy(questionDeadlineAtMillis = System.currentTimeMillis() + attempt.timeLimitSeconds * 1_000L))
+                    attemptQuestions.update(
+                        next.copy(
+                            questionDeadlineAtMillis = System.currentTimeMillis() + attempt.timeLimitSeconds * 1_000L,
+                            visited = true
+                        )
+                    )
+                } else if (next != null && !next.visited) {
+                    attemptQuestions.update(next.copy(visited = true))
                 }
                 attempts.update(attempt.copy(currentPosition = nextPosition))
                 false
