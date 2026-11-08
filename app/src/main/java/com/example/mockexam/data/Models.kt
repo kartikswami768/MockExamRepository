@@ -145,3 +145,9 @@ fun QuestionEntity.asAttemptQuestion(attemptId: String, position: Int, deadlineA
         visited = position == 0,
         skipped = false
     )
+
+
+data class LatestQuestionResponse(
+    val selectedAnswer: String?,
+    val attemptedAtMillis: Long
+)
