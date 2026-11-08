@@ -296,12 +296,13 @@ object XlsxQuestionParser {
         if (!isAndroidXmlFactory) {
             factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
             try { factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "") } catch (_: Exception) { }
             try { factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "") } catch (_: Exception) { }
         }
-        factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-
+        // Android's Expat reader defaults both external-entity features to false.
+        // Its DocumentBuilderFactory does not expose those SAX feature switches.
         val builder = factory.newDocumentBuilder().apply {
             // Defense in depth: never resolve external entities or fetch resources.
             setEntityResolver { _, _ -> org.xml.sax.InputSource(java.io.StringReader("")) }
