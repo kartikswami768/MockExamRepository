@@ -802,6 +802,247 @@ private fun ReviewScreen(repository: ExamRepository, nav: androidx.navigation.Na
 }
 
 @Composable
+private fun ReviewQuestionPlayer(
+    items: List<ReviewQuestionItem>,
+    initialIndex: Int,
+    repository: ExamRepository,
+    onClose: () -> Unit
+) {
+    if (items.isEmpty()) return
+    val scope = rememberCoroutineScope()
+    var index by remember(items, initialIndex) { mutableIntStateOf(initialIndex.coerceIn(items.indices)) }
+    var bookmarked by remember { mutableStateOf(false) }
+    var latestResponse by remember { mutableStateOf<LatestQuestionResponse?>(null) }
+    var showMap by remember { mutableStateOf(false) }
+    val item = items[index]
+
+    LaunchedEffect(item.setId, item.questionId, item.hasAttemptContext) {
+        latestResponse = if (item.hasAttemptContext) null else {
+            withContext(Dispatchers.IO) { repository.getLatestResponse(item.setId, item.questionId) }
+        }
+        bookmarked = withContext(Dispatchers.IO) { repository.isBookmarked(item.setId, item.questionId) }
+    }
+
+    val hasResponse = item.hasAttemptContext || latestResponse != null
+    val yourAnswer = if (item.hasAttemptContext) item.selectedAnswer else latestResponse?.selectedAnswer
+    val status = when {
+        !hasResponse -> "Answer key"
+        yourAnswer == null -> "Skipped"
+        yourAnswer == item.correctAnswer -> "Correct"
+        else -> "Incorrect"
+    }
+    val statusColor = when (status) {
+        "Correct" -> Green
+        "Incorrect" -> Red
+        "Skipped" -> Muted
+        else -> Teal
+    }
+    val mapItems = items.mapIndexed { itemIndex, source ->
+        if (itemIndex == index && !source.hasAttemptContext && latestResponse != null) {
+            source.copy(selectedAnswer = latestResponse?.selectedAnswer, hasAttemptContext = true)
+        } else source
+    }
+
+    Scaffold(
+        containerColor = Page,
+        topBar = {
+            Surface(color = Color.White, shadowElevation = 2.dp) {
+                Row(
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Question review", color = Navy, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                        Text("Question " + (index + 1) + " of " + items.size, color = Muted, fontSize = 12.sp)
+                    }
+                    TextButton(onClick = onClose) { Text("Close") }
+                }
+            }
+        },
+        bottomBar = {
+            Surface(color = Color.White, shadowElevation = 8.dp) {
+                Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { index = (index - 1).coerceAtLeast(0) },
+                            enabled = index > 0,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Previous") }
+                        OutlinedButton(
+                            onClick = { showMap = true },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Question map") }
+                        Button(
+                            onClick = { index = (index + 1).coerceAtMost(items.lastIndex) },
+                            enabled = index < items.lastIndex,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Next") }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val current = item
+                            scope.launch {
+                                bookmarked = withContext(Dispatchers.IO) {
+                                    repository.toggleBookmark(current.setId, current.questionId)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (bookmarked) "★ Bookmarked · Remove bookmark" else "☆ Bookmark question") }
+                }
+            }
+        }
+    ) { padding ->
+        Column(
+            Modifier.fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .pointerInput(item.questionId, index) {
+                    var dragTotal = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { _, dragAmount -> dragTotal += dragAmount },
+                        onDragEnd = {
+                            if (dragTotal < -80f) index = (index + 1).coerceAtMost(items.lastIndex)
+                            else if (dragTotal > 80f) index = (index - 1).coerceAtLeast(0)
+                            dragTotal = 0f
+                        },
+                        onDragCancel = { dragTotal = 0f }
+                    )
+                }
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(item.questionId, color = Teal, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(status.uppercase(), color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(item.question, color = Navy, fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium)
+                    LocalQuestionImage(item.imagePath)
+                    listOf("A" to item.optionA, "B" to item.optionB, "C" to item.optionC, "D" to item.optionD).forEach { (letter, option) ->
+                        val correct = letter == item.correctAnswer
+                        val selected = letter == yourAnswer
+                        val background = when {
+                            correct -> Color(0xFFE7F5EB)
+                            selected -> Color(0xFFFDECEC)
+                            else -> Color.White
+                        }
+                        val borderColor = when {
+                            correct -> Green
+                            selected -> Red
+                            else -> Color(0xFFD6DEE7)
+                        }
+                        Surface(
+                            color = background,
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(if (correct || selected) 2.dp else 1.dp, borderColor),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("$letter. $option", color = Navy, fontSize = 14.sp, fontWeight = if (correct || selected) FontWeight.SemiBold else FontWeight.Normal)
+                                if (correct) Text("Correct answer", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                else if (selected) Text("Your answer", color = Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+            if (hasResponse) {
+                SectionCard("Your response") {
+                    Text(
+                        if (yourAnswer == null) "You did not answer this question."
+                        else "Your answer: " + yourAnswer + " · " + reviewOptionText(item, yourAnswer),
+                        color = statusColor,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text("Correct answer: " + item.correctAnswer + " · " + reviewOptionText(item, item.correctAnswer), color = Green, fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Text("Correct answer: " + item.correctAnswer + " · " + reviewOptionText(item, item.correctAnswer), color = Green, fontWeight = FontWeight.SemiBold)
+            }
+            SectionCard("Explanation") {
+                Text(item.explanation, color = Color(0xFF334155), fontSize = 14.sp, lineHeight = 21.sp)
+            }
+            Text("Swipe left or right to move between questions.", color = Muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+        }
+    }
+
+    if (showMap) {
+        ReviewQuestionMapDialog(
+            items = mapItems,
+            currentIndex = index,
+            onSelect = { index = it; showMap = false },
+            onDismiss = { showMap = false }
+        )
+    }
+}
+
+private fun reviewOptionText(item: ReviewQuestionItem, letter: String): String = when (letter) {
+    "A" -> item.optionA
+    "B" -> item.optionB
+    "C" -> item.optionC
+    "D" -> item.optionD
+    else -> ""
+}
+
+@Composable
+private fun ReviewQuestionMapDialog(
+    items: List<ReviewQuestionItem>,
+    currentIndex: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.92f).padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = Color.White
+        ) {
+            Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Review question map", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LegendDot(Green, "Correct")
+                    LegendDot(Red, "Incorrect")
+                    LegendDot(Muted, "Skipped")
+                    LegendDot(Teal, "Saved / review")
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(5),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(items) { index, item ->
+                        val color = when {
+                            !item.hasAttemptContext -> Teal
+                            item.selectedAnswer == null -> Muted
+                            item.selectedAnswer == item.correctAnswer -> Green
+                            else -> Red
+                        }
+                        Button(
+                            onClick = { onSelect(index) },
+                            contentPadding = PaddingValues(0.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (item.flagged || index == currentIndex) 2.dp else 0.dp,
+                                if (item.flagged) Amber else if (index == currentIndex) Navy else Color.Transparent
+                            ),
+                            colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White),
+                            modifier = Modifier.aspectRatio(1f)
+                        ) {
+                            Text((index + 1).toString() + if (item.flagged) " ⚑" else "", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Close map") }
+            }
+        }
+    }
+}
+
+@Composable
 private fun TopAppBarSimple(title: String, subtitle: String) {
     Surface(color = Color.White, shadowElevation = 2.dp) {
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp)) {
