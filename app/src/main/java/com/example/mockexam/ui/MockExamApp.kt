@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,10 +23,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -200,8 +204,6 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
     var questions by remember { mutableStateOf<List<QuestionEntity>>(emptyList()) }
     val selectedIds = remember { mutableStateListOf<String>() }
     var pickSpecific by remember { mutableStateOf(false) }
-    var timerMode by remember { mutableStateOf("OVERALL") }
-    var overallMinutes by remember { mutableStateOf("60") }
     var perQuestionSeconds by remember { mutableStateOf("60") }
     var positive by remember { mutableStateOf("4") }
     var negative by remember { mutableStateOf("1") }
@@ -245,17 +247,21 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
                     }
                 }
             }
-            SectionCard("Time limit") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = timerMode == "OVERALL", onClick = { timerMode = "OVERALL" }, label = { Text("Whole test") })
-                    FilterChip(selected = timerMode == "PER_QUESTION", onClick = { timerMode = "PER_QUESTION" }, label = { Text("Per question") })
-                }
-                if (timerMode == "OVERALL") {
-                    NumberField("Test duration (minutes)", overallMinutes, { overallMinutes = it })
-                } else {
-                    NumberField("Time per question (seconds)", perQuestionSeconds, { perQuestionSeconds = it })
-                    Text("Each question gets its own countdown from the first time you open it. An unanswered question locks when its time expires.", color = Muted, fontSize = 12.sp)
-                }
+            SectionCard("Exam timing") {
+                NumberField("Time per question (seconds)", perQuestionSeconds, { perQuestionSeconds = it })
+                val configuredSeconds = perQuestionSeconds.toLongOrNull()
+                val calculatedTotal = configuredSeconds?.times(count.toLong())
+                Text(
+                    if (count > 0 && configuredSeconds != null && configuredSeconds > 0 && calculatedTotal != null) {
+                        "$count questions × $configuredSeconds seconds = ${formatDuration(calculatedTotal)} total"
+                    } else {
+                        "Select at least one question and enter a valid time allowance."
+                    },
+                    color = Teal,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text("This is one continuous countdown for the entire test. You can spend more or less time on individual questions; moving between questions never resets the timer.", color = Muted, fontSize = 12.sp)
             }
             SectionCard("Scoring") {
                 NumberField("Positive marks per correct answer", positive, { positive = it }, decimal = true)
@@ -275,13 +281,16 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
                     val p = positive.toDoubleOrNull()
                     val n = negative.toDoubleOrNull()
                     val s = skipped.toDoubleOrNull()
-                    val time = if (timerMode == "OVERALL") overallMinutes.toIntOrNull()?.times(60) else perQuestionSeconds.toIntOrNull()
+                    val perQuestion = perQuestionSeconds.toIntOrNull()
+                    val totalTime = if (perQuestion != null && count > 0) perQuestion.toLong() * count else 0L
+                    val time = totalTime.takeIf { it in 1L..86_400L }?.toInt()
                     val problem = when {
                         count <= 0 -> "Select at least one question."
                         p == null || p <= 0.0 -> "Positive marks must be greater than zero."
                         n == null || n < 0.0 -> "Negative marks must be zero or greater."
                         s == null || s < 0.0 -> "Skipped marks must be zero or greater."
-                        time == null || time <= 0 -> "Enter a valid time limit."
+                        perQuestion == null || perQuestion <= 0 -> "Enter a valid time per question."
+                        time == null -> "Calculated total duration must be between 1 second and 24 hours."
                         else -> null
                     }
                     if (problem != null) validation = problem else {
@@ -291,7 +300,7 @@ private fun ConfigScreen(repository: ExamRepository, nav: androidx.navigation.Na
                             try {
                                 val chosen = if (pickSpecific) selectedIds.toList() else questions.map { it.questionId }
                                 val attemptId = withContext(Dispatchers.IO) {
-                                    repository.createAttempt(setId, chosen, testName, timerMode, time!!, p!!, n!!, s!!, negativeEnabled)
+                                    repository.createAttempt(setId, chosen, testName, time!!, perQuestion!!, p!!, n!!, s!!, negativeEnabled)
                                 }
                                 nav.navigate("test/$attemptId")
                             } catch (e: Exception) { validation = e.message ?: "Could not start the test." }
