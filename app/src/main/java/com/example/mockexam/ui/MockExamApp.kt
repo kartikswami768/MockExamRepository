@@ -526,6 +526,79 @@ private fun TestScreen(repository: ExamRepository, nav: androidx.navigation.NavH
     }
 }
 
+@Composable
+private fun ExamQuestionMapDialog(
+    questions: List<AttemptQuestionEntity>,
+    currentPosition: Int,
+    bookmarkedIds: Set<String>,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.92f).padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = Color.White
+        ) {
+            Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Question map", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                Text("Tap a number to jump to that question. A flag can coexist with any answer state.", color = Muted, fontSize = 12.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LegendDot(Green, "Answered")
+                        LegendDot(Amber, "Skipped")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LegendDot(Color(0xFFDBEAFE), "Visited · unanswered")
+                        LegendDot(Color(0xFFE2E8F0), "Not visited")
+                    }
+                    Text("⚑ Marked for review · ★ Bookmarked", color = Muted, fontSize = 11.sp)
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(5),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(questions) { index, q ->
+                        val bg = when {
+                            q.selectedAnswer != null -> Green
+                            q.skipped -> Amber
+                            q.visited -> Color(0xFFDBEAFE)
+                            else -> Color(0xFFE2E8F0)
+                        }
+                        val foreground = if (q.selectedAnswer != null || q.skipped) Color.White else Navy
+                        val outline = when {
+                            q.flagged -> Amber
+                            index == currentPosition -> Navy
+                            else -> Color.Transparent
+                        }
+                        Button(
+                            onClick = { onSelect(index) },
+                            contentPadding = PaddingValues(0.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(if (q.flagged || index == currentPosition) 2.dp else 0.dp, outline),
+                            colors = ButtonDefaults.buttonColors(containerColor = bg, contentColor = foreground),
+                            modifier = Modifier.aspectRatio(1f)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Text("\${index + 1}", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    (if (q.flagged) "⚑" else "") + (if (q.questionId in bookmarkedIds) "★" else ""),
+                                    fontSize = 9.sp,
+                                    lineHeight = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Close map") }
+            }
+        }
+    }
+}
+
 private data class ReviewQuestionItem(
     val setId: String,
     val questionId: String,
