@@ -12,6 +12,10 @@ concurrency:
   group: android-apk-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Official Gradle image, pinned to the multi-platform digest for Gradle 8.9 + JDK 17.
+  GRADLE_IMAGE: gradle:8.9-jdk17@sha256:682c0245826af1e6f5f7b95306cc7039d3d8d8e8de06b1a330e6f9015ee757a0
+
 jobs:
   build:
     name: Test and build debug APK
@@ -35,21 +39,40 @@ jobs:
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Set up Gradle and dependency cache
+      - name: Set up Gradle validation and dependency cache
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
 
-      - name: Verify Gradle wrapper
-        run: |
-          chmod +x ./gradlew
-          ./gradlew --version
+      - name: Pull pinned Gradle runtime image
+        run: docker pull "$GRADLE_IMAGE"
 
-      - name: Run tests and build APK
+      - name: Verify pinned Gradle runtime
+        shell: bash
         run: |
-          ./gradlew --no-daemon \
-            :app:testDebugUnitTest \
-            :app:assembleDebug
+          mkdir -p "$GRADLE_USER_HOME"
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e GRADLE_USER_HOME=/gradle-cache \
+            -v "$GRADLE_USER_HOME:/gradle-cache" \
+            "$GRADLE_IMAGE" gradle --version
+
+      - name: Run unit tests and build APK
+        shell: bash
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e GRADLE_USER_HOME=/gradle-cache \
+            -e ANDROID_HOME=/android-sdk \
+            -e ANDROID_SDK_ROOT=/android-sdk \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "$ANDROID_HOME:/android-sdk:ro" \
+            -v "$GRADLE_USER_HOME:/gradle-cache" \
+            -w /workspace \
+            "$GRADLE_IMAGE" \
+            gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
 
       - name: Verify APK output
         run: |
