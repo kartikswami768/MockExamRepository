@@ -283,17 +283,30 @@ object XlsxQuestionParser {
         }
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = true
-            // Android's DocumentBuilderFactory does not implement setXIncludeAware();
-            // XInclude is not used by OOXML parts, so leave the platform default unchanged.
+            // XInclude defaults to false. Android's DocumentBuilderFactory throws
+            // UnsupportedOperationException from setXIncludeAware(), so do not call it.
             isExpandEntityReferences = false
-            setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            try { setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "") } catch (_: Exception) { }
-            try { setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "") } catch (_: Exception) { }
         }
-        return java.io.ByteArrayInputStream(xmlBytes).use { factory.newDocumentBuilder().parse(it) }
+
+        // Android's built-in XML provider does not support FEATURE_SECURE_PROCESSING
+        // or Xerces' DOCTYPE-disallow feature. Its Expat reader already defaults
+        // external general/parameter entities to false; keep those explicit settings.
+        val isAndroidXmlFactory =
+            factory.javaClass.name.startsWith("org.apache.harmony.xml.parsers.")
+        if (!isAndroidXmlFactory) {
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            try { factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "") } catch (_: Exception) { }
+            try { factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "") } catch (_: Exception) { }
+        }
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+
+        val builder = factory.newDocumentBuilder().apply {
+            // Defense in depth: never resolve external entities or fetch resources.
+            setEntityResolver { _, _ -> org.xml.sax.InputSource(java.io.StringReader("")) }
+        }
+        return java.io.ByteArrayInputStream(xmlBytes).use { builder.parse(it) }
     }
 
     private fun descendants(root: org.w3c.dom.Node, localName: String): List<Element> {
