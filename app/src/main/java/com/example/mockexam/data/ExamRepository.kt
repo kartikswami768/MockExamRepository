@@ -52,15 +52,17 @@ class ExamRepository(
         setId: String,
         selectedQuestionIds: List<String>,
         testName: String,
-        timingMode: String,
         timeLimitSeconds: Int,
+        secondsPerQuestion: Int,
         positiveMarks: Double,
         negativeMarks: Double,
         skippedMarks: Double,
         negativeMarkingEnabled: Boolean
     ): String {
         require(selectedQuestionIds.isNotEmpty()) { "Select at least one question." }
-        require(timeLimitSeconds > 0) { "Time limit must be greater than zero." }
+        require(timeLimitSeconds > 0) { "Total test time must be greater than zero." }
+        require(secondsPerQuestion > 0) { "Time per question must be greater than zero." }
+        require(timeLimitSeconds <= 86_400) { "Total test time cannot exceed 24 hours." }
         require(positiveMarks > 0.0) { "Positive marks must be greater than zero." }
         require(negativeMarks >= 0.0 && skippedMarks >= 0.0) { "Negative and skipped marks cannot be negative." }
         val set = sets.getById(setId) ?: error("Question bank no longer exists.")
@@ -69,7 +71,6 @@ class ExamRepository(
         require(selected.isNotEmpty()) { "No selected questions were found." }
         val now = System.currentTimeMillis()
         val attemptId = UUID.randomUUID().toString()
-        val isPerQuestion = timingMode == "PER_QUESTION"
         val attempt = TestAttemptEntity(
             id = attemptId,
             setId = setId,
@@ -78,9 +79,9 @@ class ExamRepository(
             startedAtMillis = now,
             submittedAtMillis = null,
             status = "IN_PROGRESS",
-            timingMode = if (isPerQuestion) "PER_QUESTION" else "OVERALL",
+            timingMode = "OVERALL",
             timeLimitSeconds = timeLimitSeconds,
-            deadlineAtMillis = if (isPerQuestion) null else now + timeLimitSeconds * 1_000L,
+            deadlineAtMillis = now + timeLimitSeconds * 1_000L,
             positiveMarks = positiveMarks,
             negativeMarks = negativeMarks,
             skippedMarks = skippedMarks,
@@ -95,13 +96,14 @@ class ExamRepository(
             skippedCount = 0,
             marksAwarded = 0.0,
             marksDeducted = 0.0,
-            accuracyPercent = 0.0
+            accuracyPercent = 0.0,
+            secondsPerQuestion = secondsPerQuestion
         )
         val snapshots = selected.mapIndexed { index, q ->
             q.asAttemptQuestion(
                 attemptId,
                 index,
-                if (isPerQuestion && index == 0) now + timeLimitSeconds * 1_000L else null
+                null
             )
         }
         database.withTransaction {
@@ -129,7 +131,7 @@ class ExamRepository(
                 if (item.selectedAnswer == null) attemptQuestions.update(item.copy(timeExpired = true))
                 return@withTransaction
             }
-            attemptQuestions.update(item.copy(selectedAnswer = answer))
+            attemptQuestions.update(item.copy(selectedAnswer = answer, visited = true, skipped = false))
         }
     }
 
@@ -140,7 +142,17 @@ class ExamRepository(
             val item = attemptQuestions.getOne(attemptId, position) ?: return@withTransaction
             if (item.timeExpired) return@withTransaction
             val expired = attempt.timingMode == "PER_QUESTION" && item.questionDeadlineAtMillis != null && item.questionDeadlineAtMillis <= System.currentTimeMillis()
-            attemptQuestions.update(item.copy(selectedAnswer = null, timeExpired = expired))
+            attemptQuestions.update(item.copy(selectedAnswer = null, timeExpired = expired, visited = true, skipped = false))
+        }
+    }
+
+    suspend fun skipQuestion(attemptId: String, position: Int) {
+        database.withTransaction {
+            val attempt = attempts.getById(attemptId) ?: return@withTransaction
+            if (attempt.status != "IN_PROGRESS") return@withTransaction
+            val item = attemptQuestions.getOne(attemptId, position) ?: return@withTransaction
+            if (item.selectedAnswer != null) return@withTransaction
+            attemptQuestions.update(item.copy(visited = true, skipped = true))
         }
     }
 
@@ -157,10 +169,9 @@ class ExamRepository(
             if (attempt.status != "IN_PROGRESS") return@withTransaction
             val target = position.coerceIn(0, attempt.questionCount - 1)
             val item = attemptQuestions.getOne(attemptId, target) ?: return@withTransaction
-            var changedItem = item
+            var changedItem = item.copy(visited = true)
             if (attempt.timingMode == "PER_QUESTION" && item.questionDeadlineAtMillis == null) {
-                changedItem = item.copy(questionDeadlineAtMillis = System.currentTimeMillis() + attempt.timeLimitSeconds * 1_000L)
-                attemptQuestions.update(changedItem)
+                changedItem = changedItem.copy(questionDeadlineAtMillis = System.currentTimeMillis() + attempt.timeLimitSeconds * 1_000L)
             } else if (
                 attempt.timingMode == "PER_QUESTION" &&
                 item.selectedAnswer == null &&
@@ -168,9 +179,9 @@ class ExamRepository(
                 item.questionDeadlineAtMillis != null &&
                 item.questionDeadlineAtMillis <= System.currentTimeMillis()
             ) {
-                changedItem = item.copy(timeExpired = true)
-                attemptQuestions.update(changedItem)
+                changedItem = changedItem.copy(timeExpired = true, skipped = true)
             }
+            if (changedItem != item) attemptQuestions.update(changedItem)
             attempts.update(attempt.copy(currentPosition = target))
         }
     }
@@ -187,7 +198,7 @@ class ExamRepository(
             if (current.selectedAnswer != null || current.timeExpired ||
                 current.questionDeadlineAtMillis == null || current.questionDeadlineAtMillis > now
             ) return@withTransaction false
-            attemptQuestions.update(current.copy(timeExpired = true))
+            attemptQuestions.update(current.copy(timeExpired = true, visited = true, skipped = true))
             if (attempt.currentPosition >= attempt.questionCount - 1) {
                 true
             } else {
