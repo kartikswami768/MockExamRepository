@@ -283,7 +283,8 @@ object XlsxQuestionParser {
         }
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = true
-            isXIncludeAware = false
+            // Android's DocumentBuilderFactory does not implement setXIncludeAware();
+            // XInclude is not used by OOXML parts, so leave the platform default unchanged.
             isExpandEntityReferences = false
             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
             setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
