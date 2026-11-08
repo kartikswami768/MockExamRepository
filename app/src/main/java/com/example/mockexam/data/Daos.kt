@@ -90,6 +90,18 @@ interface AttemptQuestionDao {
 @Dao
 interface ReviewDao {
     @Query("""
+        SELECT aq.selectedAnswer AS selectedAnswer, t.startedAtMillis AS attemptedAtMillis
+        FROM attempt_questions aq
+        INNER JOIN test_attempts t ON t.id = aq.attemptId
+        WHERE t.status = 'SUBMITTED'
+          AND aq.setId = :setId
+          AND aq.questionId = :questionId
+        ORDER BY t.startedAtMillis DESC
+        LIMIT 1
+    """)
+    suspend fun getLatestResponse(setId: String, questionId: String): LatestQuestionResponse?
+
+    @Query("""
         SELECT DISTINCT q.* FROM questions q
         INNER JOIN attempt_questions aq
           ON q.setId = aq.setId AND q.questionId = aq.questionId
