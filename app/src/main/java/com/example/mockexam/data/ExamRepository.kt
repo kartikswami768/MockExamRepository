@@ -274,8 +274,8 @@ class ExamRepository(
         }
     }
 
-    suspend fun getLatestResponse(setId: String, questionId: String): LatestQuestionResponse? =
-        reviews.getLatestResponse(setId, questionId)
+    suspend fun getLatestResponse(setId: String, questionId: String, responseFilter: String): LatestQuestionResponse? =
+        reviews.getLatestResponse(setId, questionId, responseFilter)
 
     suspend fun getReviewQuestions(type: String, setId: String?): List<QuestionEntity> = when (type) {
         "BOOKMARKED" -> bookmarks.getBookmarkedQuestions(setId)
