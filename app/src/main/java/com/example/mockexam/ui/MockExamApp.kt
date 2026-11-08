@@ -741,25 +741,36 @@ private fun HistoryScreen(repository: ExamRepository, nav: androidx.navigation.N
 
 @Composable
 private fun ReviewScreen(repository: ExamRepository, nav: androidx.navigation.NavHostController) {
-    val scope = rememberCoroutineScope()
     var type by remember { mutableStateOf("BOOKMARKED") }
     var sets by remember { mutableStateOf<List<QuestionSetEntity>>(emptyList()) }
     var selectedSet by remember { mutableStateOf<String?>(null) }
     var questions by remember { mutableStateOf<List<QuestionEntity>>(emptyList()) }
-    var selectedQuestion by remember { mutableStateOf<QuestionEntity?>(null) }
+    var selectedQuestionIndex by remember { mutableIntStateOf(-1) }
     var sourceMenu by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { sets = withContext(Dispatchers.IO) { repository.getSets() } }
-    LaunchedEffect(type, selectedSet) { questions = withContext(Dispatchers.IO) { repository.getReviewQuestions(type, selectedSet) } }
+    LaunchedEffect(type, selectedSet) {
+        questions = withContext(Dispatchers.IO) { repository.getReviewQuestions(type, selectedSet) }
+    }
+
+    if (selectedQuestionIndex >= 0 && questions.isNotEmpty()) {
+        ReviewQuestionPlayer(
+            items = questions.map { it.toReviewQuestionItem() },
+            initialIndex = selectedQuestionIndex,
+            repository = repository,
+            onClose = { selectedQuestionIndex = -1 }
+        )
+        return
+    }
 
     Scaffold(containerColor = Page, topBar = { TopAppBarSimple("Question review", "Bookmarks and past responses") }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-                FilterChip(selected = type == "BOOKMARKED", onClick = { type = "BOOKMARKED" }, label = { Text("Saved") })
-                FilterChip(selected = type == "INCORRECT", onClick = { type = "INCORRECT" }, label = { Text("Incorrect") })
-                FilterChip(selected = type == "SKIPPED", onClick = { type = "SKIPPED" }, label = { Text("Skipped") })
+                FilterChip(selected = type == "BOOKMARKED", onClick = { type = "BOOKMARKED"; selectedQuestionIndex = -1 }, label = { Text("Saved") })
+                FilterChip(selected = type == "INCORRECT", onClick = { type = "INCORRECT"; selectedQuestionIndex = -1 }, label = { Text("Incorrect") })
+                FilterChip(selected = type == "SKIPPED", onClick = { type = "SKIPPED"; selectedQuestionIndex = -1 }, label = { Text("Skipped") })
             }
             Box {
-                OutlinedButton(onClick = { sourceMenu = true }) { Text("Source: ${sets.firstOrNull { it.id == selectedSet }?.name ?: "All question banks"}") }
+                OutlinedButton(onClick = { sourceMenu = true }) { Text("Source: " + (sets.firstOrNull { it.id == selectedSet }?.name ?: "All question banks")) }
                 DropdownMenu(expanded = sourceMenu, onDismissRequest = { sourceMenu = false }) {
                     DropdownMenuItem(text = { Text("All question banks") }, onClick = { selectedSet = null; sourceMenu = false })
                     sets.forEach { set -> DropdownMenuItem(text = { Text(set.name) }, onClick = { selectedSet = set.id; sourceMenu = false }) }
@@ -772,51 +783,21 @@ private fun ReviewScreen(repository: ExamRepository, nav: androidx.navigation.Na
                 )
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 10.dp)) {
-                    items(questions, key = { it.setId + ":" + it.questionId }) { q ->
-                        Card(onClick = { selectedQuestion = q }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    itemsIndexed(questions, key = { _, q -> q.setId + ":" + q.questionId }) { index, q ->
+                        Card(onClick = { selectedQuestionIndex = index }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                                Text("${q.questionId} · ${sets.firstOrNull { it.id == q.setId }?.name ?: "Question bank"}", color = Teal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(q.questionId + " · " + (sets.firstOrNull { it.id == q.setId }?.name ?: "Question bank"), color = Teal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text(q.question, color = Navy, fontSize = 14.sp, maxLines = 3)
-                                Text("Tap to review answer and explanation", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 5.dp))
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Open question, answer and explanation", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                                    Text("Review →", color = Teal, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-    if (selectedQuestion != null) {
-        val q = selectedQuestion!!
-        AlertDialog(
-            onDismissRequest = { selectedQuestion = null },
-            title = { Text("${q.questionId} · Review") },
-            text = {
-                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(q.question, fontWeight = FontWeight.Medium, color = Navy)
-                    LocalQuestionImage(q.imagePath)
-                    listOf("A" to q.optionA, "B" to q.optionB, "C" to q.optionC, "D" to q.optionD).forEach { (letter, option) ->
-                        Text("$letter. $option", color = if (letter == q.correctAnswer) Green else Color(0xFF334155), fontSize = 13.sp)
-                    }
-                    Text("Correct answer: ${q.correctAnswer}", color = Green, fontWeight = FontWeight.Bold)
-                    Text(q.explanation, color = Color(0xFF334155), fontSize = 13.sp)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { selectedQuestion = null }) { Text("Close") }
-            },
-            dismissButton = {
-                if (type == "BOOKMARKED") {
-                    TextButton(onClick = {
-                        // The bookmark is durable and independent of test history.
-                        scope.launch {
-                            withContext(Dispatchers.IO) { repository.toggleBookmark(q.setId, q.questionId) }
-                            selectedQuestion = null
-                            questions = withContext(Dispatchers.IO) { repository.getReviewQuestions(type, selectedSet) }
-                        }
-                    }) { Text("Remove bookmark") }
-                }
-            }
-        )
     }
 }
 
